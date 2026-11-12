@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
+import * as AzureDevOpsCli from "./AzureDevOpsCli.ts";
 import * as AzureDevOpsPullRequestCli from "./AzureDevOpsPullRequestCli.ts";
 import {
   LOCATION_CACHE_CAPACITY,
@@ -344,6 +345,34 @@ describe("what one diff slice spends", () => {
       }
 
       expect(readsOf.get(HOT)).toBe(1);
+    }),
+  );
+});
+
+describe("getViewer", () => {
+  it.effect("reports an unreadable saved token as its own failure, not an az sign-in", () =>
+    Effect.gen(function* () {
+      const provider = yield* make.pipe(
+        Effect.provide(
+          Layer.mock(AzureDevOpsPullRequestCli.AzureDevOpsPullRequestCli)({
+            getViewer: () =>
+              Effect.fail(
+                new AzureDevOpsCli.AzureDevOpsSavedTokenUnreadableError({
+                  operation: "execute",
+                  command: "az",
+                  cwd: "/w",
+                  argumentCount: 0,
+                  cause: "locked",
+                }),
+              ),
+          }),
+        ),
+      );
+
+      const error = yield* Effect.flip(provider.getViewer({ cwd: "/w" }));
+
+      expect(error.reason).toBe("failed");
+      expect(error.detail).toContain("secret provider");
     }),
   );
 });
