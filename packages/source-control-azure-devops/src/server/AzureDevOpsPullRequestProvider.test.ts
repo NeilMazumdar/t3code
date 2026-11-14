@@ -609,9 +609,16 @@ describe("pull request locations", () => {
                   read.push("pr");
                   return PULL_REQUEST;
                 }),
-              listIterations: () => Effect.succeed([ITERATION]),
+              listIterations: () =>
+                Effect.sync(() => {
+                  read.push("iterations");
+                  return [ITERATION];
+                }),
               listIterationChanges: () =>
-                Effect.succeed({ changes: [change("a.ts")], truncated: false }),
+                Effect.sync(() => {
+                  read.push("changes");
+                  return { changes: [change("a.ts")], truncated: false };
+                }),
               readItemContent: () =>
                 Effect.succeed({ contents: side("new", 2, 4), isBinary: false }),
               ...NO_BLOBS,
@@ -623,9 +630,17 @@ describe("pull request locations", () => {
 
         yield* readDiff("acme/web/_git/web");
         yield* readDiff("acme/web/_git/web");
-        expect(read).toHaveLength(1);
         yield* readDiff("globex/web/_git/web");
-        expect(read).toHaveLength(2);
+        // A first page always lists iterations again, to see a new push.
+        expect(read).toEqual([
+          "pr",
+          "iterations",
+          "changes",
+          "iterations",
+          "pr",
+          "iterations",
+          "changes",
+        ]);
       }),
   );
 });

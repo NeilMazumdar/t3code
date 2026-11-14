@@ -199,9 +199,14 @@ export const make = Effect.gen(function* () {
 
   const EMPTY_DIFF_SLICE: ProviderDiffSlice = { patch: "", truncated: false, nextCursor: null };
 
-  // PR locations are immutable; caching avoids full PR reads for viewed-file checks. The key holds
-  // the repository, which names the organization, so a checkout pointed at another organization
-  // cannot reuse the old one's location and REST URL.
+  // PR locations are immutable; caching avoids full PR reads for viewed-file checks. Keys hold the
+  // repository, which names the organization, so a checkout pointed at another organization cannot
+  // reuse the old one's location, REST URL, or iterations.
+  const pullRequestKey = (input: {
+    readonly cwd: string;
+    readonly repository: string;
+    readonly number: number;
+  }) => JSON.stringify([input.cwd, input.repository.toLowerCase(), input.number]);
   const locations = new Map<string, AzureDevOpsRepositoryLocation>();
   // A pushed iteration never changes, so neither do its commits nor its change list.
   const knownIterations = new Map<string, ReadonlyArray<AzureDevOpsIteration>>();
@@ -212,7 +217,7 @@ export const make = Effect.gen(function* () {
     readonly repository: string;
     readonly number: number;
   }) => {
-    const key = JSON.stringify([input.cwd, input.repository.toLowerCase(), input.number]);
+    const key = pullRequestKey(input);
     const held = recall(locations, key);
     if (held !== undefined) return Effect.succeed(held);
     return cli
@@ -242,7 +247,7 @@ export const make = Effect.gen(function* () {
   }) {
     const location = yield* locationOf(input);
     if (location === null) return null;
-    const key = `${input.cwd} ${input.number}`;
+    const key = pullRequestKey(input);
     const held = recall(knownIterations, key);
     if (
       input.iterationId !== undefined &&
@@ -261,11 +266,12 @@ export const make = Effect.gen(function* () {
 
   const changesOf = (input: {
     readonly cwd: string;
+    readonly repository: string;
     readonly location: AzureDevOpsRepositoryLocation;
     readonly number: number;
     readonly iterationId: number;
   }) => {
-    const key = `${input.cwd} ${input.number} ${input.iterationId}`;
+    const key = `${pullRequestKey(input)} ${input.iterationId}`;
     const held = recall(iterationChanges, key);
     return held !== undefined
       ? Effect.succeed(held)
@@ -316,6 +322,7 @@ export const make = Effect.gen(function* () {
 
   const listLatestChanges = (input: {
     readonly cwd: string;
+    readonly repository: string;
     readonly location: AzureDevOpsRepositoryLocation;
     readonly number: number;
     readonly iterations: ReadonlyArray<AzureDevOpsIteration>;
